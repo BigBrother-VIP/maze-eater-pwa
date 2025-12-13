@@ -4,7 +4,7 @@ const CACHE_NAME = 'maze-eater-pwa-v1';
 // Lista de archivos que necesita el juego para funcionar sin conexión
 const URLS_TO_CACHE = [
   './', 
-  './index.html',
+  './Index.html',
   './manifest.json',
   './game.js', // El archivo de lógica del juego
   './MazeEater-192.png',
@@ -53,4 +53,5 @@ self.addEventListener('fetch', (event) => {
         return fetch(event.request);
       })
   );
+
 });
