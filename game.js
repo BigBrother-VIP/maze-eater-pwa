@@ -1,5 +1,5 @@
 // =============================================================
-// game.js - MAZE EATER PWA - Etapa 2: Jugador, Movimiento y Colisiones Simples
+// game.js - MAZE EATER PWA - Versión Final Corregida
 // =============================================================
 
 // 1. CONFIGURACIÓN INICIAL Y CANVAS
@@ -10,7 +10,7 @@ let tileSize; // Tamaño de cada celda del laberinto (adaptable)
 let mazeEater; // Objeto del jugador
 let ghosts = []; // Arreglo para almacenar a nuestros 4 enemigos Spectrales
 let powerModeTimer = 0; // Temporizador para el modo de "caza"
-let isGameOver = false; // ¡NUEVA VARIABLE! Controla si el juego ha terminado
+let isGameOver = false; // Controla si el juego ha terminado
 
 // 2. ESTRUCTURA DEL LABERINTO (MATRIZ)
 // 0 = Camino, 1 = Pared, 2 = Punto, 3 = Punto de Poder, 4 = Posición de inicio de Maze Eater
@@ -22,10 +22,11 @@ const map = [
     [1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1],
     [1, 2, 1, 1, 2, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 2, 1, 1, 1],
     [1, 2, 2, 2, 2, 1, 2, 2, 2, 1, 1, 2, 2, 2, 2, 1, 2, 2, 2, 1],
-    [1, 1, 1, 1, 2, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1, 1, 1, 2, 1],
-    [1, 1, 1, 1, 2, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 1],
-    [1, 1, 1, 1, 2, 1, 2, 1, 1, 0, 0, 1, 1, 2, 1, 1, 2, 1, 2, 1],
+    // *** CORRECCIÓN: SE ABRE EL CAMINO DEL FANTASMA (Row 8, cols 9-10) ***
+    [1, 1, 1, 1, 2, 1, 1, 1, 2, 0, 0, 2, 1, 1, 1, 1, 1, 1, 2, 1], // Antes era 1,1
+    [1, 1, 1, 1, 2, 1, 2, 1, 1, 0, 0, 1, 1, 2, 1, 1, 2, 1, 2, 1], 
     [1, 1, 1, 1, 2, 2, 2, 1, 0, 0, 0, 0, 1, 2, 2, 2, 2, 1, 2, 1], // Fantasmas irían en el 0's centrales
+    // ********************************************************************
     [1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 2, 1],
     [1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1],
     [1, 2, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1],
@@ -347,12 +348,10 @@ function checkIfEating() {
         map[targetRow][targetCol] = 0; // Quitar el punto
         mazeEater.score += 10; // Sumar puntuación
         playEffect(440, 0.05); // Tono rápido para comer punto
-        // Aquí iría el código para actualizar la puntuación en pantalla
     } else if (tileValue === 3) { // Es un punto de poder
         map[targetRow][targetCol] = 0; // Quitar el punto de poder
         mazeEater.score += 50; // Sumar puntuación
         playEffect(880, 0.1); // Tono más alto y largo para punto de poder
-        // Aquí iría el código para activar el modo de "caza" (Fantasmas azules)
 		// --- CÓDIGO PARA ACTIVAR EL MODO DE PODER ---
         powerModeTimer = 300; // 300 ciclos del juego (~5 segundos)
         ghosts.forEach(spectral => {
@@ -430,7 +429,7 @@ function gameOver() {
     ctx.font = 'bold ' + (tileSize * 0.5) + 'px Arial';
     ctx.fillText('Refresca la página para jugar de nuevo.', canvas.width / 2, canvas.height / 2 + tileSize * 2);
 }
-// 6. FUNCIÓN DE DIBUJO DEL MAPA (Mantiene la función anterior)
+// 6. FUNCIÓN DE DIBUJO DEL MAPA
 function drawMap() {
     // Ajustar el tamaño del Canvas a su tamaño real CSS
     const canvasSize = Math.min(canvas.clientWidth, canvas.clientHeight);
@@ -484,6 +483,12 @@ function drawMap() {
 
 // 7. FUNCIÓN DE CONTROL DE TECLADO
 function handleKeyDown(event) {
+    // *** CORRECCIÓN DE AUDIO: Desbloquear el audio en el primer evento de usuario ***
+    if (audioContext && audioContext.state === 'suspended') {
+        audioContext.resume();
+    }
+    // ********************************************************************************
+
     switch (event.key) {
         case 'ArrowUp':
         case 'w':
@@ -507,6 +512,55 @@ function handleKeyDown(event) {
             break;
     }
 }
+
+// 7.5. FUNCIONES DE CONTROL TÁCTIL (¡NUEVAS!)
+let touchStartX = 0;
+let touchStartY = 0;
+
+function handleTouchStart(event) {
+    event.preventDefault(); // Evita el desplazamiento del navegador
+    // *** CORRECCIÓN DE AUDIO: Desbloquear el audio en el primer evento de usuario TÁCTIL ***
+    if (audioContext && audioContext.state === 'suspended') {
+        audioContext.resume();
+    }
+    // ********************************************************************************
+    
+    touchStartX = event.touches[0].clientX;
+    touchStartY = event.touches[0].clientY;
+}
+
+function handleTouchEnd(event) {
+    if (!touchStartX || !touchStartY) return;
+
+    const touchEndX = event.changedTouches[0].clientX;
+    const touchEndY = event.changedTouches[0].clientY;
+
+    const dx = touchEndX - touchStartX;
+    const dy = touchEndY - touchStartY;
+    const threshold = 15; // Mínimo de píxeles para ser considerado un swipe
+
+    // Determinar si el deslizamiento fue horizontal o vertical
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > threshold) {
+        // Movimiento Horizontal (Izquierda/Derecha)
+        if (dx > 0) {
+            mazeEater.requestedDirection = 'right';
+        } else {
+            mazeEater.requestedDirection = 'left';
+        }
+    } else if (Math.abs(dy) > threshold) {
+        // Movimiento Vertical (Arriba/Abajo)
+        if (dy > 0) {
+            mazeEater.requestedDirection = 'down';
+        } else {
+            mazeEater.requestedDirection = 'up';
+        }
+    }
+
+    // Resetear las coordenadas
+    touchStartX = 0;
+    touchStartY = 0;
+}
+// ********************************************************************************************
 
 // 8. BUCLE PRINCIPAL DEL JUEGO
 function gameLoop() {
@@ -569,13 +623,13 @@ window.onload = () => {
     // 2. Agrega el listener para el teclado (control de juego)
     window.addEventListener('keydown', handleKeyDown);
 
-    // 3. Comienza el bucle del juego
+    // 3. Agrega los listeners para el control táctil (¡NUEVO!)
+    canvas.addEventListener('touchstart', handleTouchStart);
+    canvas.addEventListener('touchend', handleTouchEnd);
+    
+    // 4. Comienza el bucle del juego
     requestAnimationFrame(gameLoop);
 };
 
 // 10. MANEJO DE CAMBIO DE TAMAÑO DE PANTALLA
 window.addEventListener('resize', drawMap);
-
-// *******************************************************************
-// NOTA: Aún falta la lógica de comer puntos, los fantasmas y el sonido.
-// *******************************************************************
