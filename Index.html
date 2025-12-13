@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maze Eater - PWA</title>
+    
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#FFD700"> <link rel="manifest" href="manifest.json">
+	<link rel="icon" type="image/png" sizes="192x192" href="MazeEater-192.png">
+	<link rel="apple-touch-icon" sizes="192x192" href="MazeEater-192.png">
+	
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            /* Aseguramos que body ocupe todo el espacio y esté centrado */
+            height: 100vh;
+            width: 100vw;
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            overflow: hidden; /* Evita barras de desplazamiento */
+        }
+        #gameCanvas {
+            /* ESTO HACE QUE SEA RESPONSIVE Y CUADRADO */
+            /* Usa el 90% de la dimensión más pequeña de la pantalla */
+            width: min(90vw, 90vh); 
+            height: min(90vw, 90vh);
+            
+            border: 5px solid #0000FF; /* Borde azul del laberinto */
+            background-color: #000;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+
+    <script src="game.js"></script>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+          window.addEventListener('load', () => {
+            // USAMOS LA RUTA RELATIVA que soluciona el problema de GitHub Pages
+            navigator.serviceWorker.register('./sw.js') 
+              .then(registration => {
+                console.log('Service Worker registrado con éxito');
+              })
+              .catch(error => {
+                console.log('Fallo el registro del Service Worker: ', error);
+              });
+          });
+        }
+    </script>
+</body>
+</html>
