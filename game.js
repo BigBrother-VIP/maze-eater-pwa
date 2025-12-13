@@ -1,5 +1,5 @@
 // =============================================================
-// game.js - MAZE EATER PWA - Versión Final Corregida y Funcional
+// game.js - MAZE EATER PWA - Versión FINAL con Correcciones de Movimiento
 // =============================================================
 
 // 1. CONFIGURACIÓN INICIAL Y CANVAS
@@ -22,12 +22,11 @@ const map = [
     [1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1],
     [1, 2, 1, 1, 2, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 2, 1, 1, 1],
     [1, 2, 2, 2, 2, 1, 2, 2, 2, 1, 1, 2, 2, 2, 2, 1, 2, 2, 2, 1],
-    // --- CORRECCIÓN CRÍTICA DEL MAPA: Se abre el camino para los fantasmas (Rows 7-9) ---
-    // Esta línea (R8) ahora tiene puntos (2) donde estaba la pared, para permitir la salida
+    // --- CORRECCIÓN CRÍTICA DEL MAPA: Abrimos la puerta de la jaula (R8, C9-C10) ---
     [1, 1, 1, 1, 2, 1, 1, 1, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 2, 1], 
-    // Esta línea (R9) ahora es pasillo (2) para conectar la jaula con el pasillo de arriba
+    // La puerta se abre aquí para que los fantasmas salgan: '2' en lugar de '1'
     [1, 1, 1, 1, 2, 1, 2, 1, 1, 2, 2, 1, 1, 2, 1, 1, 2, 1, 2, 1], 
-    // La jaula de los fantasmas (R10)
+    // La jaula de los fantasmas (R9)
     [1, 1, 1, 1, 2, 2, 2, 1, 0, 0, 0, 0, 1, 2, 2, 2, 2, 1, 2, 1], 
     // -----------------------------------------------------------------------------------
     [1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 2, 1],
@@ -55,22 +54,18 @@ let hasAudio = false;
 function playEffect(frequency, duration) {
     if (!hasAudio) return;
     
-    // Crear el tono (oscilador)
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
 
     oscillator.connect(gainNode);
     gainNode.connect(audioContext.destination);
 
-    // Configuración del tono
-    oscillator.type = 'square'; // Un tono tipo "retro"
+    oscillator.type = 'square'; 
     oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
 
-    // Ajuste de volumen (Gain) para evitar clicks
     gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContext.currentTime + duration);
 
-    // Iniciar y detener el tono
     oscillator.start();
     oscillator.stop(audioContext.currentTime + duration);
 }
@@ -85,15 +80,14 @@ function Spectral(startCol, startRow, color) {
     this.row = startRow;
     this.x = startCol * tileSize + tileSize / 2;
     this.y = startRow * tileSize + tileSize / 2;
-    this.color = color; // Color individual
-    this.isFrightened = false; // ¿Está en modo de miedo?
-    this.speed = SPEED * 0.9; // Ligeramente más lentos que Maze Eater
+    this.color = color; 
+    this.isFrightened = false; 
+    this.speed = SPEED * 0.9; 
     this.direction = 'up';
 }
 
 // 3. OBJETOS DEL JUGADOR (MAZE EATER)
 function initMazeEater() {
-    // Buscar la posición inicial (el '4' en el mapa)
     let startRow, startCol;
     for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
@@ -107,46 +101,40 @@ function initMazeEater() {
     }
 
     mazeEater = {
-        // Posiciones en el grid (matriz)
         row: startRow,
         col: startCol,
-        // Posiciones reales en pixeles
         x: startCol * tileSize + tileSize / 2,
         y: startRow * tileSize + tileSize / 2,
         radius: tileSize * 0.4,
-        direction: 'right', // Dirección inicial
-        requestedDirection: 'right', // Dirección que el usuario pide
-        mouthOpen: 0.2, // Apertura inicial de la boca
-        mouthSpeed: 0.1, // Velocidad de animación de la boca
+        direction: 'right', 
+        requestedDirection: 'right', 
+        mouthOpen: 0.2, 
+        mouthSpeed: 0.1, 
         isMoving: false, 
 		score: 0
     };
 
     // --- INICIALIZACIÓN DE LOS SPECTRALES (ENEMIGOS) ---
-    // Posiciones en el grid (alrededor de la "cárcel" fantasma en la línea 10 de la matriz)
-    ghosts.push(new Spectral(9, 10, '#FF0000')); // Rojo
-    ghosts.push(new Spectral(10, 10, '#FFC0CB')); // Rosa
-    ghosts.push(new Spectral(8, 10, '#00FFFF')); // Cian
-    ghosts.push(new Spectral(11, 10, '#FFA500')); // Naranja
+    ghosts.push(new Spectral(9, 9, '#FF0000')); // Rojo: Posición inicial ajustada a la salida
+    ghosts.push(new Spectral(10, 9, '#FFC0CB')); // Rosa
+    ghosts.push(new Spectral(8, 9, '#00FFFF')); // Cian
+    ghosts.push(new Spectral(11, 9, '#FFA500')); // Naranja
 
 } // Cierre de initMazeEater
 
 // 4. FUNCIÓN PARA DIBUJAR A MAZE EATER
 function drawMazeEater() {
-    // Calcular el ángulo de la boca y la dirección
     let angleStart, angleEnd, rotation = 0;
-    // Animación de la boca (abre y cierra)
-    if (mazeEater.isMoving) { // SOLO ANIMA SI SE ESTÁ MOVIENDO
-        // Animación solo si se está moviendo	
+
+    if (mazeEater.isMoving) { 
 		if (mazeEater.mouthOpen > 0.4 || mazeEater.mouthOpen < 0.05) {
 			mazeEater.mouthSpeed *= -1;
-    }
-    mazeEater.mouthOpen += mazeEater.mouthSpeed;
+        }
+        mazeEater.mouthOpen += mazeEater.mouthSpeed;
 	} else {
-        // Si está quieto, la boca se mantiene en una apertura mínima
-        mazeEater.mouthOpen = 0.05; // Boca casi cerrada para que parezca que está cerrado
+        mazeEater.mouthOpen = 0.05; 
     }
-    // Determinar la rotación según la dirección
+
     switch (mazeEater.direction) {
         case 'up': rotation = 270 * Math.PI / 180; break;
         case 'down': rotation = 90 * Math.PI / 180; break;
@@ -154,16 +142,13 @@ function drawMazeEater() {
         case 'right': rotation = 0; break;
     }
 
-    // Calcular los ángulos de la boca
     angleStart = mazeEater.mouthOpen * Math.PI + rotation;
     angleEnd = (2 * Math.PI - mazeEater.mouthOpen * Math.PI) + rotation;
     
-    // DIBUJO
-    ctx.fillStyle = '#A020F0'; // Color Violeta del personaje
+    ctx.fillStyle = '#A020F0'; 
     ctx.beginPath();
-    // Arco: x, y, radio, ángulo inicial, ángulo final
     ctx.arc(mazeEater.x, mazeEater.y, mazeEater.radius, angleStart, angleEnd, false);
-    ctx.lineTo(mazeEater.x, mazeEater.y); // Cierra la boca al centro
+    ctx.lineTo(mazeEater.x, mazeEater.y); 
     ctx.fill();
     ctx.closePath();
 }
@@ -173,23 +158,19 @@ function drawMazeEater() {
 // ---------------------------------------------
 function drawSpectrales() {
     ghosts.forEach(spectral => {
-        // Ajustar posición en pixeles si el tamaño de tile cambió
+        // Asegurar que la posición del píxel esté sincronizada con la posición del grid
         spectral.x = spectral.col * tileSize + tileSize / 2;
         spectral.y = spectral.row * tileSize + tileSize / 2;
         
         ctx.beginPath();
         
-        // El color depende de si está asustado (modo de poder) o no
-        ctx.fillStyle = spectral.isFrightened ? '#0000FF' : spectral.color; // Azul si está asustado
+        ctx.fillStyle = spectral.isFrightened ? '#0000FF' : spectral.color; 
         
-        // Dibujar el cuerpo (círculo)
         ctx.arc(spectral.x, spectral.y, tileSize * 0.4, 0, Math.PI * 2, false);
         ctx.fill();
         ctx.closePath();
         
-        // Dibujar un pequeño "pie" o base cuadrada para simular la forma arcade
         ctx.fillRect(spectral.x - tileSize * 0.4, spectral.y, tileSize * 0.8, tileSize * 0.4);
-        
     });
 }
 
@@ -198,7 +179,6 @@ function checkWallCollision(x, y, dir) {
     const nextTileX = Math.floor(x / tileSize);
     const nextTileY = Math.floor(y / tileSize);
 
-    // Ajustar la posición para verificar la celda adyacente
     let targetCol = nextTileX;
     let targetRow = nextTileY;
 
@@ -207,11 +187,10 @@ function checkWallCollision(x, y, dir) {
     else if (dir === 'left') targetCol--;
     else if (dir === 'right') targetCol++;
 
-    // Verificar si la celda objetivo es una pared (1)
     if (targetRow >= 0 && targetRow < ROWS && targetCol >= 0 && targetCol < COLS) {
         return map[targetRow][targetCol] === 1; // Devuelve true si hay pared
     }
-    return true; // Asumir pared si está fuera de límites
+    return true; 
 }
 
 // ---------------------------------------------
@@ -220,7 +199,6 @@ function checkWallCollision(x, y, dir) {
 function getPossibleDirections(row, col) {
     const validDirections = []; 
     
-    // Lista de movimientos posibles y sus cambios de coordenada
     const checks = [
         { dir: 'up', dRow: -1, dCol: 0 },
         { dir: 'down', dRow: 1, dCol: 0 },
@@ -232,10 +210,8 @@ function getPossibleDirections(row, col) {
         const targetRow = row + check.dRow;
         const targetCol = col + check.dCol;
 
-        // Asegurarse de que la celda esté dentro del mapa y NO sea una pared (1)
         if (targetRow >= 0 && targetRow < ROWS && targetCol >= 0 && targetCol < COLS) {
-            // El fantasma puede moverse a cualquier pasillo (0, 2, 3)
-            if (map[targetRow][targetCol] !== 1) { 
+            if (map[targetRow][targetCol] !== 1) {
                 validDirections.push(check.dir);
             }
         }
@@ -249,18 +225,19 @@ function getPossibleDirections(row, col) {
 // ---------------------------------------------
 function moveSpectrales() {
     ghosts.forEach(spectral => {
-        // Solo tomar una decisión cuando esté centrado en una celda
-        const isCentered = (Math.abs(spectral.x - (spectral.col * tileSize + tileSize / 2)) < SPEED) && 
-                           (Math.abs(spectral.y - (spectral.row * tileSize + tileSize / 2)) < SPEED);
+        // Tolerancia de centrado (menos estricta para fantasmas)
+        const tolerance = tileSize * 0.3;
+        const isCentered = (Math.abs(spectral.x - (spectral.col * tileSize + tileSize / 2)) < tolerance) && 
+                           (Math.abs(spectral.y - (spectral.row * tileSize + tileSize / 2)) < tolerance);
         
         if (isCentered) {
-            // Actualizar la posición del grid después de mover
+            // Actualizar la posición del grid
             spectral.col = Math.floor(spectral.x / tileSize);
             spectral.row = Math.floor(spectral.y / tileSize);
 
             const possibleDirs = getPossibleDirections(spectral.row, spectral.col);
 
-            // Regla 1: No dar marcha atrás inmediatamente (evita ir y venir en un pasillo)
+            // Regla: Evitar dar marcha atrás
             let allowedDirs = possibleDirs.filter(dir => {
                 if (spectral.direction === 'up' && dir === 'down') return false;
                 if (spectral.direction === 'down' && dir === 'up') return false;
@@ -268,14 +245,11 @@ function moveSpectrales() {
                 if (spectral.direction === 'right' && dir === 'left') return false;
                 return true;
             });
-
-            // Si solo queda una dirección, o si es una intersección, elegir una aleatoria entre las permitidas
+            
             if (allowedDirs.length === 0) {
-                // Caso extremo: Atrapado, forzar un cambio de 180 grados si es posible
                 allowedDirs = possibleDirs; 
             }
             
-            // Elegir una dirección aleatoria de las permitidas
             const newDirection = allowedDirs[Math.floor(Math.random() * allowedDirs.length)];
             spectral.direction = newDirection;
         }
@@ -295,23 +269,34 @@ function updatePosition() {
     let nextX = mazeEater.x;
     let nextY = mazeEater.y;
     
-    // Mover primero en la dirección solicitada (para hacer 'esquina')
+    // --- CORRECCIÓN CRÍTICA DE GIRO Y CENTRADO ---
     let currentDir = mazeEater.direction;
     if (mazeEater.requestedDirection !== currentDir) {
-        // Intentar moverse en la dirección solicitada
-        let tempX = mazeEater.x, tempY = mazeEater.y;
         
-        if (mazeEater.requestedDirection === 'up') tempY -= SPEED;
-        else if (mazeEater.requestedDirection === 'down') tempY += SPEED;
-        else if (mazeEater.requestedDirection === 'left') tempX -= SPEED;
-        else if (mazeEater.requestedDirection === 'right') tempX += SPEED;
+        const centerX = mazeEater.col * tileSize + tileSize / 2;
+        const centerY = mazeEater.row * tileSize + tileSize / 2;
+        
+        // La tolerancia debe ser igual a la velocidad para asegurar que el giro ocurre justo cuando se entra al tile
+        const isAlignedX = Math.abs(mazeEater.y - centerY) < SPEED;
+        const isAlignedY = Math.abs(mazeEater.x - centerX) < SPEED;
 
-        // Si no hay pared en la dirección solicitada, se cambia
-        if (!checkWallCollision(tempX, tempY, mazeEater.requestedDirection)) {
-             mazeEater.direction = mazeEater.requestedDirection;
-             currentDir = mazeEater.direction;
+        if (mazeEater.requestedDirection === 'up' || mazeEater.requestedDirection === 'down') {
+            // Si intenta girar verticalmente, DEBE estar alineado en el eje X
+            if (isAlignedY && !checkWallCollision(mazeEater.x, mazeEater.y - SPEED, mazeEater.requestedDirection)) {
+                mazeEater.direction = mazeEater.requestedDirection;
+                currentDir = mazeEater.direction;
+                mazeEater.x = centerX; // FORZAR CENTRADO EN EL EJE X
+            }
+        } else if (mazeEater.requestedDirection === 'left' || mazeEater.requestedDirection === 'right') {
+            // Si intenta girar horizontalmente, DEBE estar alineado en el eje Y
+            if (isAlignedX && !checkWallCollision(mazeEater.x + SPEED, mazeEater.y, mazeEater.requestedDirection)) {
+                mazeEater.direction = mazeEater.requestedDirection;
+                currentDir = mazeEater.direction;
+                mazeEater.y = centerY; // FORZAR CENTRADO EN EL EJE Y
+            }
         }
     }
+    // -------------------------------------------------------------
 
     // Mover en la dirección actual
     if (currentDir === 'up') nextY -= SPEED;
@@ -320,16 +305,11 @@ function updatePosition() {
     else if (currentDir === 'right') nextX += SPEED;
     
     // Verificar colisión ANTES de mover
-if (!checkWallCollision(nextX, nextY, currentDir)) {
-        // Movimiento exitoso
+    if (!checkWallCollision(nextX, nextY, currentDir)) {
         mazeEater.x = nextX;
         mazeEater.y = nextY;
-        
-        // --- CASO 1: SE MOVIÓ ---
         mazeEater.isMoving = true; 
     } else {
-        // Si chocó o no se movió porque el movimiento es nulo
-        // --- CASO 2: NO SE MOVIÓ ---
         mazeEater.isMoving = false;
     }
     
@@ -342,26 +322,23 @@ if (!checkWallCollision(nextX, nextY, currentDir)) {
 // FUNCIÓN PARA REVISAR Y COMER PUNTOS
 // ---------------------------------------------
 function checkIfEating() {
-    // Usamos la posición del grid que ya se actualizó en updatePosition()
     const targetRow = mazeEater.row;
     const targetCol = mazeEater.col;
 
     const tileValue = map[targetRow][targetCol];
 
-    if (tileValue === 2) { // Es un punto normal
-        map[targetRow][targetCol] = 0; // Quitar el punto
-        mazeEater.score += 10; // Sumar puntuación
-        playEffect(440, 0.05); // Tono rápido para comer punto
-    } else if (tileValue === 3) { // Es un punto de poder
-        map[targetRow][targetCol] = 0; // Quitar el punto de poder
-        mazeEater.score += 50; // Sumar puntuación
-        playEffect(880, 0.1); // Tono más alto y largo para punto de poder
-		// --- CÓDIGO PARA ACTIVAR EL MODO DE PODER ---
-        powerModeTimer = 300; // 300 ciclos del juego (~5 segundos)
+    if (tileValue === 2) { 
+        map[targetRow][targetCol] = 0; 
+        mazeEater.score += 10; 
+        playEffect(440, 0.05); 
+    } else if (tileValue === 3) { 
+        map[targetRow][targetCol] = 0; 
+        mazeEater.score += 50; 
+        playEffect(880, 0.1); 
+        powerModeTimer = 300; // 5 segundos de modo poder
         ghosts.forEach(spectral => {
-            spectral.isFrightened = true; // Cambia el estado a "asustado"
+            spectral.isFrightened = true; 
         });
-        // ---------------------------------------------
     }
 }
 
@@ -370,23 +347,19 @@ function checkIfEating() {
 // ---------------------------------------------
 function checkGhostCollision() {
     ghosts.forEach(spectral => {
-        // Distancia entre los centros de Maze Eater y el Spectral
         const dx = mazeEater.x - spectral.x;
         const dy = mazeEater.y - spectral.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
         
-        // La colisión ocurre si la distancia es menor que la suma de sus radios.
         const collisionRadius = tileSize * 0.8; 
 
         if (distance < collisionRadius) {
-            // ¡COLISIÓN DETECTADA!
             
             if (spectral.isFrightened) {
-                // 1. COME AL SPECTRAL
                 mazeEater.score += 200;
-                playEffect(1000, 0.2); // Tono de victoria
+                playEffect(1000, 0.2); 
                 
-                // Manda al Spectral de vuelta a su posición inicial
+                // Manda al Spectral de vuelta a su posición inicial (R9 C9-C11)
                 spectral.x = spectral.initialCol * tileSize + tileSize / 2;
                 spectral.y = spectral.initialRow * tileSize + tileSize / 2;
                 spectral.col = spectral.initialCol;
@@ -394,7 +367,6 @@ function checkGhostCollision() {
                 spectral.isFrightened = false;
                 
                } else {
-                // 2. PIERDE VIDA / FIN DEL JUEGO
                 isGameOver = true;
             }
         }
@@ -404,9 +376,8 @@ function checkGhostCollision() {
 // FUNCIÓN PARA DIBUJAR LA PUNTUACIÓN Y LA UI
 // ---------------------------------------------
 function drawUI() {
-    // Muestra la puntuación actual
     ctx.fillStyle = '#FFF';
-    ctx.font = 'bold ' + (tileSize * 0.8) + 'px Arial'; // Ajusta el tamaño de la fuente al tamaño del tile
+    ctx.font = 'bold ' + (tileSize * 0.8) + 'px Arial'; 
     ctx.textAlign = 'left';
     ctx.fillText('Puntuación: ' + mazeEater.score, tileSize / 2, tileSize);
 }
@@ -414,69 +385,54 @@ function drawUI() {
 // FUNCIÓN PARA MOSTRAR LA PANTALLA DE FIN DEL JUEGO
 // ---------------------------------------------
 function gameOver() {
-    // Semi-transparencia negra para oscurecer el mapa
     ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Título de GAME OVER
-    ctx.fillStyle = '#FF0000'; // Rojo
+    ctx.fillStyle = '#FF0000'; 
     ctx.font = 'bold ' + (tileSize * 1.5) + 'px Arial';
     ctx.textAlign = 'center';
     ctx.fillText('¡FIN DEL JUEGO!', canvas.width / 2, canvas.height / 2 - tileSize);
     
-    // Puntuación Final
     ctx.fillStyle = '#FFF';
     ctx.font = 'bold ' + (tileSize * 1) + 'px Arial';
     ctx.fillText('Puntuación final: ' + mazeEater.score, canvas.width / 2, canvas.height / 2 + tileSize/2);
     
-    // Instrucción para reiniciar
     ctx.font = 'bold ' + (tileSize * 0.5) + 'px Arial';
     ctx.fillText('Refresca la página para jugar de nuevo.', canvas.width / 2, canvas.height / 2 + tileSize * 2);
 }
 // 6. FUNCIÓN DE DIBUJO DEL MAPA
 function drawMap() {
-    // Ajustar el tamaño del Canvas a su tamaño real CSS
     const canvasSize = Math.min(canvas.clientWidth, canvas.clientHeight);
     canvas.width = canvasSize;
     canvas.height = canvasSize;
     
-    // Determinar el tamaño de cada tile (celda)
     tileSize = canvasSize / COLS;
     
-    // Si es la primera vez, inicializa Maze Eater con el tileSize correcto
     if (!mazeEater) initMazeEater();
-    mazeEater.radius = tileSize * 0.4; // Ajusta el radio si el tamaño cambia
+    mazeEater.radius = tileSize * 0.4; 
 
-    // Recorrer la matriz y dibujar
     for (let row = 0; row < ROWS; row++) {
         for (let col = 0; col < COLS; col++) {
             const tileValue = map[row][col];
             const x = col * tileSize;
             const y = row * tileSize;
 
-            // Pared (1)
             if (tileValue === 1) {
                 ctx.fillStyle = '#0000FF'; 
                 ctx.fillRect(x, y, tileSize, tileSize);
             } 
-            
-            // Punto (2)
             else if (tileValue === 2) {
                 ctx.fillStyle = '#FFF';
                 ctx.beginPath();
                 ctx.arc(x + tileSize / 2, y + tileSize / 2, tileSize / 8, 0, Math.PI * 2);
                 ctx.fill();
             }
-            
-            // Punto de Poder (3)
             else if (tileValue === 3) {
                 ctx.fillStyle = '#FFF';
                 ctx.beginPath();
                 ctx.arc(x + tileSize / 2, y + tileSize / 2, tileSize / 4, 0, Math.PI * 2);
                 ctx.fill();
             }
-            
-            // Pasillo (0) - Limpia el espacio
             else {
                 ctx.fillStyle = '#000';
                 ctx.fillRect(x, y, tileSize, tileSize);
@@ -487,11 +443,11 @@ function drawMap() {
 
 // 7. FUNCIÓN DE CONTROL DE TECLADO
 function handleKeyDown(event) {
-    // *** CORRECCIÓN DE AUDIO: Desbloquear el audio en el primer evento de usuario ***
+    // *** DESBLOQUEO DE AUDIO ***
     if (audioContext && audioContext.state === 'suspended') {
         audioContext.resume();
     }
-    // ********************************************************************************
+    // ****************************
 
     switch (event.key) {
         case 'ArrowUp':
@@ -517,17 +473,17 @@ function handleKeyDown(event) {
     }
 }
 
-// 7.5. FUNCIONES DE CONTROL TÁCTIL (¡NUEVAS!)
+// 7.5. FUNCIONES DE CONTROL TÁCTIL
 let touchStartX = 0;
 let touchStartY = 0;
 
 function handleTouchStart(event) {
-    event.preventDefault(); // Evita el desplazamiento del navegador
-    // *** CORRECCIÓN DE AUDIO: Desbloquear el audio en el primer evento de usuario TÁCTIL ***
+    event.preventDefault(); 
+    // *** DESBLOQUEO DE AUDIO TÁCTIL ***
     if (audioContext && audioContext.state === 'suspended') {
         audioContext.resume();
     }
-    // ********************************************************************************
+    // **********************************
     
     touchStartX = event.touches[0].clientX;
     touchStartY = event.touches[0].clientY;
@@ -543,16 +499,13 @@ function handleTouchEnd(event) {
     const dy = touchEndY - touchStartY;
     const threshold = 15; // Mínimo de píxeles para ser considerado un swipe
 
-    // Determinar si el deslizamiento fue horizontal o vertical
     if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > threshold) {
-        // Movimiento Horizontal (Izquierda/Derecha)
         if (dx > 0) {
             mazeEater.requestedDirection = 'right';
         } else {
             mazeEater.requestedDirection = 'left';
         }
     } else if (Math.abs(dy) > threshold) {
-        // Movimiento Vertical (Arriba/Abajo)
         if (dy > 0) {
             mazeEater.requestedDirection = 'down';
         } else {
@@ -560,7 +513,6 @@ function handleTouchEnd(event) {
         }
     }
 
-    // Resetear las coordenadas
     touchStartX = 0;
     touchStartY = 0;
 }
@@ -568,70 +520,47 @@ function handleTouchEnd(event) {
 
 // 8. BUCLE PRINCIPAL DEL JUEGO
 function gameLoop() {
-    // 1. Redibuja el mapa y los puntos (Limpia la pantalla)
     drawMap(); 
 
     if (!isGameOver) {
-        // --- LÓGICA Y MOVIMIENTO: SOLO SI EL JUEGO ESTÁ ACTIVO ---
-        
-        // 2. Actualiza la posición y revisa colisiones con paredes
         updatePosition();
-     
-    	// 2.5. REVISA Y COME PUNTOS
     	checkIfEating(); 
-     
-    	// 2.7. Mueve a los Spectrales
     	moveSpectrales(); 
-
-    	// 2.9. REVISA COLISIÓN CON SPECTRALES
-        checkGhostCollision(); 
-     
-    	// 3. Dibuja a Maze Eater con la animación de la boca
+    	checkGhostCollision(); 
         drawMazeEater();
-     
-    	// 3.5. Dibuja a los Spectrales
     	drawSpectrales(); 
     	
-        // 4. GESTIÓN DEL MODO DE PODER
         if (powerModeTimer > 0) {
             powerModeTimer--;
             if (powerModeTimer === 0) {
                 ghosts.forEach(spectral => {
-                    spectral.isFrightened = false; // Desactiva el modo de miedo
+                    spectral.isFrightened = false; 
                 });
             }
         }
     } else {
-        // --- FIN DEL JUEGO ---
-        gameOver(); // Muestra la pantalla de fin del juego
+        gameOver(); 
     }
     
-    // Dibuja la puntuación (siempre visible, incluso en GAME OVER)
     drawUI(); 
-
-    // 5. Solicita el siguiente fotograma para la animación (SIEMPRE se debe ejecutar)
     requestAnimationFrame(gameLoop);
 }
 
 // 9. INICIALIZACIÓN: Esperar a que el HTML esté listo y empezar el loop
 window.onload = () => {
-    // 1. Inicializa y dibuja el mapa (configura tileSize y mazeEater)
     drawMap(); 
 
-	// --- INICIALIZACIÓN DEL AUDIO ---
 	if (window.AudioContext) {
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
         hasAudio = true;
     }
 
-    // 2. Agrega el listener para el teclado (control de juego)
     window.addEventListener('keydown', handleKeyDown);
 
-    // 3. Agrega los listeners para el control táctil (¡NUEVO!)
+    // *** LISTENERS PARA EL CONTROL TÁCTIL ***
     canvas.addEventListener('touchstart', handleTouchStart);
     canvas.addEventListener('touchend', handleTouchEnd);
     
-    // 4. Comienza el bucle del juego
     requestAnimationFrame(gameLoop);
 };
 
