@@ -1,5 +1,5 @@
 // =============================================================
-// game.js - MAZE EATER PWA - Versión Final Corregida
+// game.js - MAZE EATER PWA - Versión Final Corregida y Funcional
 // =============================================================
 
 // 1. CONFIGURACIÓN INICIAL Y CANVAS
@@ -22,11 +22,14 @@ const map = [
     [1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1],
     [1, 2, 1, 1, 2, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 2, 1, 1, 1],
     [1, 2, 2, 2, 2, 1, 2, 2, 2, 1, 1, 2, 2, 2, 2, 1, 2, 2, 2, 1],
-    // *** CORRECCIÓN: SE ABRE EL CAMINO DEL FANTASMA (Row 8, cols 9-10) ***
-    [1, 1, 1, 1, 2, 1, 1, 1, 2, 0, 0, 2, 1, 1, 1, 1, 1, 1, 2, 1], // Antes era 1,1
-    [1, 1, 1, 1, 2, 1, 2, 1, 1, 0, 0, 1, 1, 2, 1, 1, 2, 1, 2, 1], 
-    [1, 1, 1, 1, 2, 2, 2, 1, 0, 0, 0, 0, 1, 2, 2, 2, 2, 1, 2, 1], // Fantasmas irían en el 0's centrales
-    // ********************************************************************
+    // --- CORRECCIÓN CRÍTICA DEL MAPA: Se abre el camino para los fantasmas (Rows 7-9) ---
+    // Esta línea (R8) ahora tiene puntos (2) donde estaba la pared, para permitir la salida
+    [1, 1, 1, 1, 2, 1, 1, 1, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 2, 1], 
+    // Esta línea (R9) ahora es pasillo (2) para conectar la jaula con el pasillo de arriba
+    [1, 1, 1, 1, 2, 1, 2, 1, 1, 2, 2, 1, 1, 2, 1, 1, 2, 1, 2, 1], 
+    // La jaula de los fantasmas (R10)
+    [1, 1, 1, 1, 2, 2, 2, 1, 0, 0, 0, 0, 1, 2, 2, 2, 2, 1, 2, 1], 
+    // -----------------------------------------------------------------------------------
     [1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 2, 1],
     [1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1],
     [1, 2, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1],
@@ -115,7 +118,7 @@ function initMazeEater() {
         requestedDirection: 'right', // Dirección que el usuario pide
         mouthOpen: 0.2, // Apertura inicial de la boca
         mouthSpeed: 0.1, // Velocidad de animación de la boca
-        isMoving: false, // <--- ¡AGREGA ESTA LÍNEA AQUÍ!
+        isMoving: false, 
 		score: 0
     };
 
@@ -133,7 +136,7 @@ function drawMazeEater() {
     // Calcular el ángulo de la boca y la dirección
     let angleStart, angleEnd, rotation = 0;
     // Animación de la boca (abre y cierra)
-    if (mazeEater.isMoving) { // <--- SOLO ANIMA SI SE ESTÁ MOVIENDO
+    if (mazeEater.isMoving) { // SOLO ANIMA SI SE ESTÁ MOVIENDO
         // Animación solo si se está moviendo	
 		if (mazeEater.mouthOpen > 0.4 || mazeEater.mouthOpen < 0.05) {
 			mazeEater.mouthSpeed *= -1;
@@ -231,7 +234,8 @@ function getPossibleDirections(row, col) {
 
         // Asegurarse de que la celda esté dentro del mapa y NO sea una pared (1)
         if (targetRow >= 0 && targetRow < ROWS && targetCol >= 0 && targetCol < COLS) {
-            if (map[targetRow][targetCol] !== 1) {
+            // El fantasma puede moverse a cualquier pasillo (0, 2, 3)
+            if (map[targetRow][targetCol] !== 1) { 
                 validDirections.push(check.dir);
             }
         }
