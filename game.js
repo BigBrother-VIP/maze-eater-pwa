@@ -1,5 +1,5 @@
 // =============================================================
-// game.js - MAZE EATER PWA - Versión FINAL y Estándar de Arcade
+// game.js - MAZE EATER PWA - Versión FINAL de Arcade (Reglas Completas)
 // =============================================================
 
 // 1. CONFIGURACIÓN INICIAL Y CANVAS
@@ -11,6 +11,7 @@ let mazeEater;
 let ghosts = [];
 let powerModeTimer = 0; 
 let isGameOver = false;
+let eatenGhostMultiplier = 0; // Puntuación que se duplica (200, 400, 800, etc.)
 
 // VARIABLES DE NIVEL Y TRANSICIÓN
 let totalDots = 0;
@@ -21,9 +22,9 @@ let flashTimer = 0;
 let flashCount = 0;
 let showCharacters = true;
 
-// 2. ESTRUCTURA DEL LABERINTO (Con casa de Fantasmas Aislada)
-// 0: Camino (vacío) | 1: Pared (Wall) | 2: Punto | 3: Punto de Poder (Power Dot) | 4: Inicio Jugador
-// 5: Puerta de la Jaula (Solo Fantasmas) | 6: Interior de la Jaula (Solo Fantasmas)
+// 2. ESTRUCTURA DEL LABERINTO (Sin puntos en la jaula)
+// 0: Camino | 1: Pared | 2: Punto | 3: Punto de Poder | 4: Inicio Jugador
+// 5: Puerta Fantasmas (Pared Maze Eater) | 6: Interior Jaula (Pared Maze Eater)
 const initialMapLayout = [
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
     [1, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 1],
@@ -32,18 +33,10 @@ const initialMapLayout = [
     [1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1],
     [1, 2, 1, 1, 2, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 2, 1, 1, 1],
     [1, 2, 2, 2, 2, 1, 2, 2, 2, 1, 1, 2, 2, 2, 2, 1, 2, 2, 2, 1],
-    [1, 1, 1, 1, 2, 1, 1, 0, 2, 2, 2, 2, 0, 1, 1, 1, 1, 1, 2, 1], 
-    
-    // R8: Puerta de la jaula (5) - Maze Eater NO PUEDE entrar
+    [1, 1, 1, 1, 2, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 1], 
     [1, 1, 1, 1, 2, 1, 0, 5, 5, 5, 5, 5, 0, 1, 1, 1, 1, 1, 2, 1], 
-    
-    // R9: Interior de la jaula (6) - NO hay puntos aquí
     [1, 1, 1, 1, 2, 1, 0, 6, 6, 6, 6, 6, 0, 1, 1, 1, 1, 1, 2, 1],
-    
-    // R10: Fila del Warp (Túnel)
     [0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0],
-    
-    // R11: Pasillo inferior
     [1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 2, 1],
     [1, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 1],
     [1, 2, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1],
@@ -80,14 +73,14 @@ function playEffect(frequency, duration, type = 'square') {
         gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContext.currentTime + duration);
         oscillator.start();
         oscillator.stop(audioContext.currentTime + duration);
-    } catch (e) { console.log(e); }
+    } catch (e) { /* Silencio, error de audio */ }
 }
 
 // ---------------------------------------------
 // CLASE SPECTRAL (FANTASMA)
 // ---------------------------------------------
 function Spectral(startCol, startRow, color) {
-    this.initialCol = startCol;
+    this.initialCol = startCol; 
     this.initialRow = startRow;
     this.col = startCol;
     this.row = startRow;
@@ -97,7 +90,6 @@ function Spectral(startCol, startRow, color) {
     this.isFrightened = false; 
     this.speed = SPEED * 0.85;
     this.direction = 'up';
-    this.scatterTarget = { col: 1, row: 1 }; // Objetivo para cuando "huyen"
 }
 
 // ---------------------------------------------
@@ -115,32 +107,40 @@ function resetLevel(resetMap = false) {
             }
         }
     }
-
-    let startRow, startCol;
-    for (let r = 0; r < ROWS; r++) {
-        for (let c = 0; c < COLS; c++) {
-            if (initialMapLayout[r][c] === 4) {
-                startRow = r;
-                startCol = c;
-                break;
+    
+    // Si es la primera carga o Game Over, inicializar Score y Vidas
+    if (!mazeEater || resetMap) {
+        let startRow, startCol;
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                if (initialMapLayout[r][c] === 4) { startRow = r; startCol = c; break; }
             }
         }
+        mazeEater = {
+            row: startRow, col: startCol,
+            x: startCol * tileSize + tileSize / 2, y: startRow * tileSize + tileSize / 2,
+            radius: tileSize * 0.4, direction: 'right', requestedDirection: 'right', 
+            mouthOpen: 0.2, mouthSpeed: 0.1, isMoving: false, 
+            score: mazeEater ? mazeEater.score : 0, 
+            lives: mazeEater ? mazeEater.lives : 3 // 3 Vidas iniciales
+        };
+    } else {
+        // Solo resetear la posición, mantener score y vidas
+        let startRow, startCol;
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                if (initialMapLayout[r][c] === 4) { startRow = r; startCol = c; break; }
+            }
+        }
+        mazeEater.row = startRow; mazeEater.col = startCol;
+        mazeEater.x = startCol * tileSize + tileSize / 2; mazeEater.y = startRow * tileSize + tileSize / 2;
+        mazeEater.direction = 'right'; mazeEater.requestedDirection = 'right';
+        mazeEater.isMoving = false;
     }
-
-    mazeEater = {
-        row: startRow,
-        col: startCol,
-        x: startCol * tileSize + tileSize / 2,
-        y: startRow * tileSize + tileSize / 2,
-        radius: tileSize * 0.4,
-        direction: 'right', 
-        requestedDirection: 'right', 
-        mouthOpen: 0.2, 
-        mouthSpeed: 0.1, 
-        isMoving: false, 
-		score: mazeEater ? mazeEater.score : 0 
-    };
-
+    
+    eatenGhostMultiplier = 0; // Resetear multiplicador al inicio de Power Mode o al morir.
+    powerModeTimer = 0; // Asegurar que el modo poder está apagado
+    
     // Reiniciar Fantasmas (Posiciones dentro de la casa R9)
     ghosts = [];
     ghosts.push(new Spectral(9, 9, '#FF0000')); // Rojo
@@ -152,10 +152,53 @@ function resetLevel(resetMap = false) {
 }
 
 // ---------------------------------------------
-// DIBUJO DE MAZE EATER y FANTASMAS
+// DIBUJO DE FANTASMAS (Con ojos de modo asustado)
+// ---------------------------------------------
+function drawSpectrales() {
+    if (!showCharacters) return;
+
+    ghosts.forEach(spectral => {
+        // La posición de la grilla se actualiza en moveSpectrales, aquí usamos (x, y) actual
+        
+        ctx.beginPath();
+        let bodyColor = spectral.color;
+        
+        // Cuerpos Asustados: Azul (o parpadeando blanco/azul si se acaba el tiempo)
+        if (spectral.isFrightened) {
+            bodyColor = (powerModeTimer < 100 && Math.floor(Date.now() / 100) % 2 === 0) ? '#FFFFFF' : '#0000FF';
+        }
+
+        ctx.fillStyle = bodyColor;
+        ctx.arc(spectral.x, spectral.y, tileSize * 0.4, 0, Math.PI * 2, false);
+        ctx.fill();
+        ctx.closePath();
+        ctx.fillRect(spectral.x - tileSize * 0.4, spectral.y, tileSize * 0.8, tileSize * 0.4);
+
+        // Ojos: Siempre blancos, pero se vuelven dos puntos blancos simples si está asustado (arcade look)
+        if (spectral.isFrightened) {
+            ctx.fillStyle = '#FFF'; 
+            ctx.fillRect(spectral.x - tileSize * 0.2, spectral.y - tileSize * 0.1, tileSize * 0.05, tileSize * 0.05);
+            ctx.fillRect(spectral.x + tileSize * 0.15, spectral.y - tileSize * 0.1, tileSize * 0.05, tileSize * 0.05);
+        } else {
+             // Ojos normales
+            ctx.fillStyle = '#FFF';
+            ctx.beginPath();
+            ctx.arc(spectral.x - tileSize * 0.15, spectral.y - tileSize * 0.1, tileSize * 0.1, 0, Math.PI * 2);
+            ctx.arc(spectral.x + tileSize * 0.15, spectral.y - tileSize * 0.1, tileSize * 0.1, 0, Math.PI * 2);
+            ctx.fill();
+            // Iris (negra)
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(spectral.x - tileSize * 0.15, spectral.y - tileSize * 0.1, tileSize * 0.05, 0, Math.PI * 2);
+            ctx.arc(spectral.x + tileSize * 0.15, spectral.y - tileSize * 0.1, tileSize * 0.05, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    });
+}
+// ---------------------------------------------
+// DIBUJO DE MAZE EATER
 // ---------------------------------------------
 function drawMazeEater() {
-    // ... Lógica de dibujo de Maze Eater (Se mantiene igual) ...
     if (!showCharacters) return;
 
     let angleStart, angleEnd, rotation = 0;
@@ -179,7 +222,7 @@ function drawMazeEater() {
     angleStart = mazeEater.mouthOpen * Math.PI + rotation;
     angleEnd = (2 * Math.PI - mazeEater.mouthOpen * Math.PI) + rotation;
     
-    ctx.fillStyle = '#A020F0'; 
+    ctx.fillStyle = '#FFD700'; // Dorado
     ctx.beginPath();
     ctx.arc(mazeEater.x, mazeEater.y, mazeEater.radius, angleStart, angleEnd, false);
     ctx.lineTo(mazeEater.x, mazeEater.y); 
@@ -187,42 +230,18 @@ function drawMazeEater() {
     ctx.closePath();
 }
 
-function drawSpectrales() {
-    // ... Lógica de dibujo de Fantasmas (Se mantiene igual) ...
-    if (!showCharacters) return;
-
-    ghosts.forEach(spectral => {
-        spectral.x = spectral.col * tileSize + tileSize / 2;
-        spectral.y = spectral.row * tileSize + tileSize / 2;
-        
-        ctx.beginPath();
-        let color = spectral.color;
-        if (spectral.isFrightened) {
-            color = (powerModeTimer < 100 && Math.floor(Date.now() / 100) % 2 === 0) ? '#FFFFFF' : '#0000FF';
-        }
-
-        ctx.fillStyle = color;
-        ctx.arc(spectral.x, spectral.y, tileSize * 0.4, 0, Math.PI * 2, false);
-        ctx.fill();
-        ctx.closePath();
-        ctx.fillRect(spectral.x - tileSize * 0.4, spectral.y, tileSize * 0.8, tileSize * 0.4);
-    });
-}
-
 // ---------------------------------------------
 // COLISIONES CON PAREDES (ESPECÍFICAS)
 // ---------------------------------------------
-
-// FUNCIÓN PARA EL JUGADOR (NO PUEDE ENTRAR A 1, 5 o 6)
+// Maze Eater NO puede entrar a 1 (pared), 5 (puerta) o 6 (interior jaula)
 function checkMazeEaterWallCollision(x, y, dir) {
-    if (x < 0 || x > canvas.width) return false;
-
+    if (x < 0 || x > canvas.width) return false; 
     const nextTileX = Math.floor(x / tileSize);
     const nextTileY = Math.floor(y / tileSize);
-
     let targetCol = nextTileX;
     let targetRow = nextTileY;
-
+    
+    // Proyección
     if (dir === 'up') targetRow = Math.floor((y - tileSize/2) / tileSize);
     else if (dir === 'down') targetRow = Math.floor((y + tileSize/2) / tileSize);
     else if (dir === 'left') targetCol = Math.floor((x - tileSize/2) / tileSize);
@@ -230,13 +249,12 @@ function checkMazeEaterWallCollision(x, y, dir) {
 
     if (targetRow >= 0 && targetRow < ROWS && targetCol >= 0 && targetCol < COLS) {
         const tile = map[targetRow][targetCol];
-        // 1: Pared | 5: Puerta de Fantasmas | 6: Interior de Fantasmas
         return tile === 1 || tile === 5 || tile === 6; 
     }
     return false;
 }
 
-// FUNCIÓN PARA FANTASMAS (SÓLO BLOQUEA 1)
+// Fantasmas SÓLO bloquea 1 (pared)
 function getPossibleGhostDirections(row, col) {
     const validDirections = []; 
     const checks = [
@@ -249,7 +267,7 @@ function getPossibleGhostDirections(row, col) {
         const c = col + check.dCol;
         
         if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
-            // Fantasmas solo se detienen si es una pared '1'
+            // Fantasmas pueden pasar por 0, 2, 3, 5, 6. Solo 1 es pared.
             if (map[r][c] !== 1) { 
                 validDirections.push(check.dir);
             }
@@ -261,7 +279,7 @@ function getPossibleGhostDirections(row, col) {
 }
 
 // ---------------------------------------------
-// IA DE FANTASMAS (AHORA SÍ FUNCIONA LA INDEPENDENCIA)
+// IA DE FANTASMAS (CON SALIDA DE JAULA FORZADA)
 // ---------------------------------------------
 function moveSpectrales() {
     if (isLevelTransition) return;
@@ -275,26 +293,36 @@ function moveSpectrales() {
             spectral.col = Math.floor(spectral.x / tileSize);
             spectral.row = Math.floor(spectral.y / tileSize);
 
+            const currentTile = map[spectral.row][spectral.col];
+            let forcedDirection = null;
+
+            // 1. LÓGICA DE SALIDA: Si está dentro de la jaula (6) o en la puerta (5), forzar UP (arriba)
+            if (currentTile === 6 || currentTile === 5) {
+                // Solo forzar UP si aún está en la fila de la casa (fila 8 o 9)
+                if (spectral.row >= 8) { 
+                    forcedDirection = 'up';
+                }
+            }
+            
+            // 2. LÓGICA NORMAL (Random con prevención de reversa)
             const possibleDirs = getPossibleGhostDirections(spectral.row, spectral.col);
 
             let allowedDirs = possibleDirs.filter(dir => {
-                // Evitar reversa inmediata
                 if (spectral.direction === 'up' && dir === 'down') return false;
                 if (spectral.direction === 'down' && dir === 'up') return false;
                 if (spectral.direction === 'left' && dir === 'right') return false;
                 if (spectral.direction === 'right' && dir === 'left') return false;
-                // Fantasmas en la jaula (tiles 6) solo pueden ir HACIA ARRIBA hasta salir.
-                if (map[spectral.row][spectral.col] === 6 && dir !== 'up') return false;
-                
                 return true;
             });
-            if (allowedDirs.length === 0) allowedDirs = possibleDirs;
             
-            // Si hay más de una opción (intersección), elegir una nueva dirección
-            if (allowedDirs.length > 1 || allowedDirs[0] !== spectral.direction) {
+            if (allowedDirs.length === 0) allowedDirs = possibleDirs; 
+
+            if (forcedDirection) {
+                spectral.direction = forcedDirection;
+            } else if (allowedDirs.length > 1 || allowedDirs[0] !== spectral.direction) {
+                // Si hay intersección o tope, elegir una nueva dirección
                 spectral.direction = allowedDirs[Math.floor(Math.random() * allowedDirs.length)];
             }
-            // Si solo hay una opción, se queda con ella (el filtro ya la puso en allowedDirs)
         }
 
         // Mover
@@ -317,7 +345,7 @@ function moveSpectrales() {
 // ---------------------------------------------
 // ACTUALIZAR POSICIÓN JUGADOR + WARP
 // ---------------------------------------------
-function updatePosition() {
+function updatePosition() { 
     if (isLevelTransition) return;
 
     let nextX = mazeEater.x;
@@ -332,6 +360,7 @@ function updatePosition() {
         const isAlignedY = Math.abs(mazeEater.x - centerX) < SPEED * 1.5;
         let canTurn = false;
         
+        // Verifica si puede girar sin chocar con la pared (incluyendo la casa de fantasmas)
         if (mazeEater.requestedDirection === 'up' || mazeEater.requestedDirection === 'down') {
             if (isAlignedY && !checkMazeEaterWallCollision(mazeEater.x, mazeEater.y + (mazeEater.requestedDirection==='up'?-SPEED:SPEED), mazeEater.requestedDirection)) {
                 mazeEater.x = centerX; canTurn = true;
@@ -376,7 +405,7 @@ function updatePosition() {
 // ---------------------------------------------
 // COMER PUNTOS Y REVISAR NIVEL
 // ---------------------------------------------
-function checkIfEating() {
+function checkIfEating() { 
     if (isLevelTransition) return;
 
     if (mazeEater.row < 0 || mazeEater.row >= ROWS || mazeEater.col < 0 || mazeEater.col >= COLS) return;
@@ -395,6 +424,7 @@ function checkIfEating() {
         playEffect(880, 0.1, 'sawtooth'); 
         powerModeTimer = 400; 
         ghosts.forEach(spectral => { spectral.isFrightened = true; });
+        eatenGhostMultiplier = 0; // Resetear multiplicador al iniciar Power Mode
     }
 
     if (dotsEaten >= totalDots) {
@@ -420,6 +450,7 @@ function updateLevelTransition() {
         playEffect(600, 0.05);
     }
 
+    // 10 cambios de visibilidad = 5 parpadeos completos
     if (flashCount >= 10) {
         level++;
         isLevelTransition = false;
@@ -428,39 +459,45 @@ function updateLevelTransition() {
     }
 }
 
+
 // ---------------------------------------------
-// COLISIONES CON ENEMIGOS
+// REGLAS DE COLISIÓN (PUNTAJE MULTIPLICADOR)
 // ---------------------------------------------
 function checkGhostCollision() {
     if (isLevelTransition) return;
 
-    ghosts.forEach(spectral => {
+    for (let i = 0; i < ghosts.length; i++) {
+        const spectral = ghosts[i];
         const dx = mazeEater.x - spectral.x;
         const dy = mazeEater.y - spectral.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
         
-        // Colisión reforzada
         if (distance < tileSize * 0.7) { 
             
             if (spectral.isFrightened) {
-                // EL FANTASMA MUERE
-                mazeEater.score += 200;
+                // FANTASMA AZUL COMIDO (PUNTAJE DOBLE)
+                if (eatenGhostMultiplier === 0) eatenGhostMultiplier = 200;
+                else eatenGhostMultiplier *= 2; 
+
+                mazeEater.score += eatenGhostMultiplier;
                 playEffect(150, 0.2, 'sawtooth');
                 
-                // --- Reaparecer en la casa ---
+                // Reaparecer en la casa (reset)
                 spectral.x = spectral.initialCol * tileSize + tileSize / 2;
                 spectral.y = spectral.initialRow * tileSize + tileSize / 2;
                 spectral.col = spectral.initialCol;
                 spectral.row = spectral.initialRow;
-                spectral.isFrightened = false;
+                spectral.isFrightened = false; // Ya no está asustado
                 
             } else {
-                // JUGADOR PIERDE
+                // JUGADOR PIERDE VIDA (FANTASMA NORMAL)
                 isGameOver = true;
+                mazeEater.lives--;
                 playEffect(100, 1, 'sawtooth');
+                break; 
             }
         }
-    });
+    }
 }
 
 // ---------------------------------------------
@@ -473,6 +510,24 @@ function drawUI() {
     ctx.fillText('Score: ' + mazeEater.score, tileSize / 2, tileSize);
     ctx.textAlign = 'right';
     ctx.fillText('Nivel: ' + level, canvas.width - tileSize/2, tileSize);
+
+    // DIBUJAR VIDAS (Pac-Man Icons)
+    ctx.textAlign = 'left';
+    ctx.font = 'bold ' + (tileSize * 0.4) + 'px Arial';
+    ctx.fillText('Vidas:', tileSize / 2, canvas.height - tileSize / 2);
+
+    for (let i = 0; i < mazeEater.lives; i++) {
+        const lifeX = tileSize * 2 + (i * tileSize * 1.5);
+        const lifeY = canvas.height - tileSize / 2;
+        
+        ctx.fillStyle = '#FFD700'; 
+        ctx.beginPath();
+        // Dibujar un pequeño Maze Eater sin boca que mira a la derecha
+        ctx.arc(lifeX, lifeY, tileSize * 0.4, 0.2 * Math.PI, 1.8 * Math.PI, false);
+        ctx.lineTo(lifeX, lifeY); 
+        ctx.fill();
+        ctx.closePath();
+    }
 }
 
 function gameOver() {
@@ -484,9 +539,9 @@ function gameOver() {
     ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - tileSize);
     ctx.fillStyle = '#FFF';
     ctx.font = 'bold ' + (tileSize * 1) + 'px Arial';
-    ctx.fillText('Final Score: ' + mazeEater.score, canvas.width / 2, canvas.height / 2 + tileSize/2);
+    ctx.fillText('Puntuación Final: ' + mazeEater.score, canvas.width / 2, canvas.height / 2 + tileSize/2);
     ctx.font = 'bold ' + (tileSize * 0.5) + 'px Arial';
-    ctx.fillText('Refresca para jugar', canvas.width / 2, canvas.height / 2 + tileSize * 2);
+    ctx.fillText(mazeEater.lives > 0 ? 'Presiona para Continuar' : 'Refresca para jugar', canvas.width / 2, canvas.height / 2 + tileSize * 2);
 }
 
 function drawMap() {
@@ -505,10 +560,10 @@ function drawMap() {
             const y = row * tileSize;
 
             if (tileValue === 1) {
-                // Pared
+                // Pared Azul
                 ctx.fillStyle = '#0000FF'; ctx.fillRect(x, y, tileSize, tileSize);
             } else if (tileValue === 2) {
-                // Punto
+                // Punto normal
                 ctx.fillStyle = '#FFF'; ctx.beginPath();
                 ctx.arc(x + tileSize / 2, y + tileSize / 2, tileSize / 8, 0, Math.PI * 2); ctx.fill();
             } else if (tileValue === 3) {
@@ -516,16 +571,16 @@ function drawMap() {
                 ctx.fillStyle = '#FFF'; ctx.beginPath();
                 ctx.arc(x + tileSize / 2, y + tileSize / 2, tileSize / 4, 0, Math.PI * 2); ctx.fill();
             } else if (tileValue === 5) {
-                // Puerta de Fantasmas: Dibujar línea encima del camino
+                // Puerta de Fantasmas: Dibujar línea sobre camino negro
                 ctx.fillStyle = '#000'; ctx.fillRect(x, y, tileSize, tileSize);
-                ctx.strokeStyle = '#FFA500'; // Color de la puerta
+                ctx.strokeStyle = '#FFA500'; 
                 ctx.lineWidth = 2;
                 ctx.beginPath();
                 ctx.moveTo(x, y + tileSize / 2);
                 ctx.lineTo(x + tileSize, y + tileSize / 2);
                 ctx.stroke();
             } else if (tileValue === 6) {
-                // Interior de la Jaula: Solo camino negro
+                // Interior de la Jaula: Solo camino negro (NO hay puntos)
                 ctx.fillStyle = '#000'; ctx.fillRect(x, y, tileSize, tileSize);
             } else {
                 // Camino vacío (0)
@@ -539,6 +594,12 @@ function drawMap() {
 // CONTROLES Y LOOP
 // ---------------------------------------------
 function handleKeyDown(event) {
+    if (isGameOver && mazeEater.lives > 0) {
+         // Si es Game Over y quedan vidas, cualquier tecla o toque continúa
+        isGameOver = false;
+        resetLevel(false); 
+        return;
+    }
     if (audioContext && audioContext.state === 'suspended') audioContext.resume();
     switch (event.key) {
         case 'ArrowUp': case 'w': case 'W': mazeEater.requestedDirection = 'up'; break;
@@ -552,6 +613,11 @@ let touchStartX = 0;
 let touchStartY = 0;
 function handleTouchStart(event) {
     event.preventDefault(); 
+    if (isGameOver && mazeEater.lives > 0) {
+        isGameOver = false;
+        resetLevel(false); 
+        return;
+    }
     if (audioContext && audioContext.state === 'suspended') audioContext.resume();
     touchStartX = event.touches[0].clientX;
     touchStartY = event.touches[0].clientY;
@@ -579,13 +645,25 @@ function gameLoop() {
             
             if (powerModeTimer > 0) {
                 powerModeTimer--;
-                if (powerModeTimer === 0) ghosts.forEach(s => s.isFrightened = false);
+                if (powerModeTimer === 0) {
+                     ghosts.forEach(s => s.isFrightened = false);
+                     eatenGhostMultiplier = 0; // Se resetea el multiplicador al acabar Power
+                }
             }
         }
         drawMazeEater();
         drawSpectrales(); 
     } else {
         gameOver(); 
+        if (mazeEater.lives > 0 && !isLevelTransition) {
+            // El reinicio se maneja por eventos (keydown o touch) en esta versión,
+            // pero si quieres un temporizador forzado, descomenta la siguiente línea:
+            /* setTimeout(() => {
+                isGameOver = false;
+                resetLevel(false); 
+            }, 3000); 
+            */
+        }
     }
     drawUI(); 
     requestAnimationFrame(gameLoop);
