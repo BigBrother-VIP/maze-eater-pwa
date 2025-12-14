@@ -439,4 +439,167 @@ function checkGhostCollision() {
         const dy = mazeEater.y - spectral.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
         
-        //
+        // Colisión reforzada
+        if (distance < tileSize * 0.7) { 
+            
+            if (spectral.isFrightened) {
+                // EL FANTASMA MUERE
+                mazeEater.score += 200;
+                playEffect(150, 0.2, 'sawtooth');
+                
+                // --- Reaparecer en la casa ---
+                spectral.x = spectral.initialCol * tileSize + tileSize / 2;
+                spectral.y = spectral.initialRow * tileSize + tileSize / 2;
+                spectral.col = spectral.initialCol;
+                spectral.row = spectral.initialRow;
+                spectral.isFrightened = false;
+                
+            } else {
+                // JUGADOR PIERDE
+                isGameOver = true;
+                playEffect(100, 1, 'sawtooth');
+            }
+        }
+    });
+}
+
+// ---------------------------------------------
+// INTERFAZ (UI) y MAPA
+// ---------------------------------------------
+function drawUI() {
+    ctx.fillStyle = '#FFF';
+    ctx.font = 'bold ' + (tileSize * 0.8) + 'px Arial'; 
+    ctx.textAlign = 'left';
+    ctx.fillText('Score: ' + mazeEater.score, tileSize / 2, tileSize);
+    ctx.textAlign = 'right';
+    ctx.fillText('Nivel: ' + level, canvas.width - tileSize/2, tileSize);
+}
+
+function gameOver() {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#FF0000'; 
+    ctx.font = 'bold ' + (tileSize * 1.5) + 'px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - tileSize);
+    ctx.fillStyle = '#FFF';
+    ctx.font = 'bold ' + (tileSize * 1) + 'px Arial';
+    ctx.fillText('Final Score: ' + mazeEater.score, canvas.width / 2, canvas.height / 2 + tileSize/2);
+    ctx.font = 'bold ' + (tileSize * 0.5) + 'px Arial';
+    ctx.fillText('Refresca para jugar', canvas.width / 2, canvas.height / 2 + tileSize * 2);
+}
+
+function drawMap() {
+    const canvasSize = Math.min(canvas.clientWidth, canvas.clientHeight);
+    canvas.width = canvasSize;
+    canvas.height = canvasSize;
+    tileSize = canvasSize / COLS;
+    
+    if (!mazeEater) resetLevel(true);
+    mazeEater.radius = tileSize * 0.4; 
+
+    for (let row = 0; row < ROWS; row++) {
+        for (let col = 0; col < COLS; col++) {
+            const tileValue = map[row][col];
+            const x = col * tileSize;
+            const y = row * tileSize;
+
+            if (tileValue === 1) {
+                // Pared
+                ctx.fillStyle = '#0000FF'; ctx.fillRect(x, y, tileSize, tileSize);
+            } else if (tileValue === 2) {
+                // Punto
+                ctx.fillStyle = '#FFF'; ctx.beginPath();
+                ctx.arc(x + tileSize / 2, y + tileSize / 2, tileSize / 8, 0, Math.PI * 2); ctx.fill();
+            } else if (tileValue === 3) {
+                // Punto de Poder
+                ctx.fillStyle = '#FFF'; ctx.beginPath();
+                ctx.arc(x + tileSize / 2, y + tileSize / 2, tileSize / 4, 0, Math.PI * 2); ctx.fill();
+            } else if (tileValue === 5) {
+                // Puerta de Fantasmas: Dibujar línea encima del camino
+                ctx.fillStyle = '#000'; ctx.fillRect(x, y, tileSize, tileSize);
+                ctx.strokeStyle = '#FFA500'; // Color de la puerta
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(x, y + tileSize / 2);
+                ctx.lineTo(x + tileSize, y + tileSize / 2);
+                ctx.stroke();
+            } else if (tileValue === 6) {
+                // Interior de la Jaula: Solo camino negro
+                ctx.fillStyle = '#000'; ctx.fillRect(x, y, tileSize, tileSize);
+            } else {
+                // Camino vacío (0)
+                ctx.fillStyle = '#000'; ctx.fillRect(x, y, tileSize, tileSize);
+            }
+        }
+    }
+}
+
+// ---------------------------------------------
+// CONTROLES Y LOOP
+// ---------------------------------------------
+function handleKeyDown(event) {
+    if (audioContext && audioContext.state === 'suspended') audioContext.resume();
+    switch (event.key) {
+        case 'ArrowUp': case 'w': case 'W': mazeEater.requestedDirection = 'up'; break;
+        case 'ArrowDown': case 's': case 'S': mazeEater.requestedDirection = 'down'; break;
+        case 'ArrowLeft': case 'a': case 'A': mazeEater.requestedDirection = 'left'; break;
+        case 'ArrowRight': case 'd': case 'D': mazeEater.requestedDirection = 'right'; break;
+    }
+}
+
+let touchStartX = 0;
+let touchStartY = 0;
+function handleTouchStart(event) {
+    event.preventDefault(); 
+    if (audioContext && audioContext.state === 'suspended') audioContext.resume();
+    touchStartX = event.touches[0].clientX;
+    touchStartY = event.touches[0].clientY;
+}
+function handleTouchEnd(event) {
+    if (!touchStartX || !touchStartY) return;
+    const dx = event.changedTouches[0].clientX - touchStartX;
+    const dy = event.changedTouches[0].clientY - touchStartY;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 15) mazeEater.requestedDirection = dx > 0 ? 'right' : 'left';
+    else if (Math.abs(dy) > 15) mazeEater.requestedDirection = dy > 0 ? 'down' : 'up';
+    touchStartX = 0; touchStartY = 0;
+}
+
+function gameLoop() {
+    drawMap(); 
+    
+    if (!isGameOver) {
+        if (isLevelTransition) {
+            updateLevelTransition();
+        } else {
+            updatePosition();
+            checkIfEating(); 
+            moveSpectrales(); 
+            checkGhostCollision();
+            
+            if (powerModeTimer > 0) {
+                powerModeTimer--;
+                if (powerModeTimer === 0) ghosts.forEach(s => s.isFrightened = false);
+            }
+        }
+        drawMazeEater();
+        drawSpectrales(); 
+    } else {
+        gameOver(); 
+    }
+    drawUI(); 
+    requestAnimationFrame(gameLoop);
+}
+
+window.onload = () => {
+    drawMap(); 
+	if (window.AudioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        hasAudio = true;
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    canvas.addEventListener('touchstart', handleTouchStart);
+    canvas.addEventListener('touchend', handleTouchEnd);
+    requestAnimationFrame(gameLoop);
+};
+window.addEventListener('resize', drawMap);
